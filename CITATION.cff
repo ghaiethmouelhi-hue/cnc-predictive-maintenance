@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "Citez ce projet si vous l'utilisez dans un travail académique."
+title: "CNC Sentinel — Predictive Maintenance (XGBoost + RAG)"
+version: "1.0.0"
+date-released: "2026-11-06"
+license: MIT
+repository-code: "https://github.com/REMPLACER_PAR_VOTRE_COMPTE/cnc-predictive-maintenance"
+authors:
+  - family-names: Mouelhi
+    given-names: Ghaith
+    url: "https://ghaieth-mouelhi.netlify.app/"
+  - family-names: Ammar
+    given-names: Chadi
+    url: "https://www.linkedin.com/in/chadi-ammar/"
+references:
+  - type: dataset
+    title: "AI4I 2020 Predictive Maintenance Dataset"
+    authors:
+      - family-names: Matzka
+        given-names: Stephan
+    year: 2020
+    doi: "10.24432/C5HS5C"
+    license: "CC BY 4.0"

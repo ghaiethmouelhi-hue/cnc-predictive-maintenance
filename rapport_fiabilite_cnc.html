@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fiabilité &amp; maintenance prédictive — Machine CNC (AI4I 2020)</title>
+<style>
+  :root { --ink:#1a2332; --acc:#0a66c2; --warn:#b45309; --ok:#047857; --bg:#f6f8fa; }
+  body { font-family: Georgia, "Times New Roman", serif; color: var(--ink);
+         max-width: 900px; margin: 0 auto; padding: 2rem; line-height: 1.65;
+         background: var(--bg); }
+  h1 { font-size: 1.9rem; border-bottom: 3px solid var(--acc); padding-bottom: .4rem; }
+  h2 { font-size: 1.4rem; color: var(--acc); margin-top: 2.2rem;
+       border-left: 5px solid var(--acc); padding-left: .6rem; }
+  h3 { font-size: 1.1rem; margin-top: 1.4rem; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0;
+          background: #fff; font-size: .95rem; }
+  th, td { border: 1px solid #cbd5e1; padding: .45rem .7rem; text-align: left; }
+  th { background: #e8eef5; }
+  code, pre { font-family: Consolas, "Courier New", monospace; font-size: .88rem; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 8px;
+        overflow-x: auto; }
+  .note { background: #fef3c7; border-left: 4px solid var(--warn);
+          padding: .7rem 1rem; margin: 1rem 0; }
+  .ok { background: #ecfdf5; border-left: 4px solid var(--ok);
+        padding: .7rem 1rem; margin: 1rem 0; }
+  figure { margin: 1.2rem 0; text-align: center; }
+  figure img { max-width: 100%; border: 1px solid #cbd5e1; border-radius: 6px;
+               background: #fff; }
+  figcaption { font-size: .88rem; color: #475569; font-style: italic; margin-top: .4rem; }
+  .kpis { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1.2rem 0; }
+  .kpi { flex: 1 1 160px; background: #fff; border: 1px solid #cbd5e1;
+         border-radius: 8px; padding: .8rem; text-align: center; }
+  .kpi b { display: block; font-size: 1.5rem; color: var(--acc); }
+  .kpi span { font-size: .8rem; color: #64748b; }
+</style>
+</head>
+<body>
+
+<h1>Fiabilité &amp; maintenance prédictive d'une machine CNC</h1>
+<p><em>Dataset réel UCI AI4I 2020 — 10 000 observations horaires, 100 machines.
+Calculs exécutés par <code>reliability_analysis.py</code> (sortie vérifiée, exit code 0).
+Toutes les hypothèses sont marquées <b>HYPOTHÈSE</b> ; aucune valeur n'est inventée.</em></p>
+
+<h2>1. Introduction</h2>
+<p>Ce rapport applique une démarche FMDS (fiabilité — maintenance — data science) à une
+machine-outil CNC, sur le jeu de données réel <a
+href="https://archive.ics.uci.edu/dataset/601/ai4i+2020+predictive+maintenance+dataset">UCI
+AI4I 2020</a> déjà présent dans le projet (<code>data/raw/ai4i2020.csv</code>). Les
+objectifs sont : estimer la fiabilité R(t), diagnostiquer les modes de défaillance,
+et en déduire une stratégie de maintenance chiffrée. La couche ML de diagnostic
+(XGBoost, AUC 0.985, rappel 88.2 % au seuil 0.111) est déjà opérationnelle dans le projet.</p>
+
+<h2>2. Étude de la machine</h2>
+<h3>2.1 Fonctionnement et composants critiques</h3>
+<p>Une CNC convertit un programme G-code en mouvements coordonnés broche + axes.
+Composants critiques : broche et outil coupant (usure, rupture), entraînement de
+broche (roulements), système de refroidissement/lubrification, axes et guidages.
+Les 5 modes de panne du dataset correspondent à cette chaîne fonctionnelle.</p>
+
+<h3>2.2 AMDEC (FMEA) — criticité G × O × D</h3>
+<table>
+<tr><th>Mode</th><th>Cause racine</th><th>Effet</th><th>Détection</th><th>G</th><th>O</th><th>D</th><th>Criticité</th></tr>
+<tr><td><b>TWF</b> usure outil</td><td>Usure &gt; 200–240 min</td><td>Rebuts, arrêt broche</td><td>tool_wear, wear_rate</td><td>8</td><td>5</td><td>4</td><td><b>160</b></td></tr>
+<tr><td><b>HDF</b> thermique</td><td>Refroidissement insuffisant (ΔT &lt; 8.6 K)</td><td>roulements, précision</td><td>temp_diff</td><td>7</td><td>4</td><td>5</td><td><b>140</b></td></tr>
+<tr><td><b>OSF</b> surcharge</td><td>Couple prolongé &gt; 45 N·m</td><td>Fatigue mécanique</td><td>torque, rpm_torque_ratio</td><td>7</td><td>4</td><td>4</td><td><b>112</b></td></tr>
+<tr><td><b>PWF</b> puissance</td><td>Couple/rpm hors plage (~11 kW)</td><td>Surintensité, arrêt drive</td><td>power = rpm × torque</td><td>6</td><td>4</td><td>4</td><td><b>96</b></td></tr>
+<tr><td><b>RNF</b> aléatoire</td><td>Électronique, capteur</td><td>Indéterminé</td><td>Quasi-nulle</td><td>6</td><td>1</td><td>9</td><td><b>54</b></td></tr>
+</table>
+
+<h3>2.3 Stratégie de maintenance adaptée</h3>
+<table>
+<tr><th>Type</th><th>Application</th><th>Justification</th></tr>
+<tr><td>Corrective</td><td>RNF uniquement</td><td>Occurrence faible (19/10 000) ; anticipation non rentable</td></tr>
+<tr><td>Préventive systématique</td><td>Remplacement outil à 180 min</td><td>Usure prévisible et déterministe</td></tr>
+<tr><td>Conditionnelle</td><td>HDF, PWF, OSF</td><td>Défaut progressif mesurable en continu (seuils capteurs)</td></tr>
+<tr><td>Prédictive (ML)</td><td>TWF + combiné</td><td>Le modèle XGBoost capte les interactions invisibles par seuils simples</td></tr>
+</table>
+
+<h2>3. Analyse de fiabilité — résultats réels</h2>
+
+<div class="kpis">
+  <div class="kpi"><b>96.61 %</b><span>R(1 h) Kaplan-Meier</span></div>
+  <div class="kpi"><b>3.39 %</b><span>taux de panne</span></div>
+  <div class="kpi"><b>29.50 h</b><span>MTBF</span></div>
+  <div class="kpi"><b>88.06 %</b><span>Disponibilité A (MTTR hypothèse)</span></div>
+</div>
+
+<h3>3.1 Données et préparation</h3>
+<p>10 000 lignes, 339 pannes (3.39 %), 0 valeur aberrante (torque/rpm négatifs).
+Chaque ligne est traitée comme 1 h-machine observée : panne → événement à t = 1 h,
+sinon censure à droite à 1 h.</p>
+
+<h3>3.2 Kaplan-Meier</h3>
+<figure>
+  <img src="data/processed/kaplan_meier.png" alt="Kaplan-Meier">
+  <figcaption>Fig. 1 — R(t) Kaplan-Meier, horizon 1 h.</figcaption>
+</figure>
+<div class="ok"><b>Contrôle indépendant n°1 (réussi)</b> : R_KM(1 h) = 0.966100 ==
+1 − 339/10 000 = 0.966100. Les deux calculs coïncident exactement.</div>
+
+<h3>3.3 Lois paramétriques et AIC</h3>
+<div class="note"><b>Limite méthodologique assumée</b> : le dataset est un snapshot
+horaire (toutes les durées valent 1 h). Une Weibull à 2 paramètres libres est
+<b>non identifiable</b> (β → ∞ ; lifelines ne converge pas — vérifié). Seule la
+loi à 1 paramètre est estimable : l'exponentielle, ou une Weibull contrainte β = 1
+(équivalente). L'estimation de β &lt; 1 ou β &gt; 1 (jeunesse/usure) exigerait un
+historique GMAO avec des temps-avant-panne variés.</div>
+<table>
+<tr><th>Loi</th><th>AIC</th><th>λ (1/h)</th><th>MTBF (h)</th></tr>
+<tr><td>Exponentielle</td><td>2974.5827</td><td>0.033900</td><td>29.499</td></tr>
+<tr><td>Weibull (β=1 fixé)</td><td>2974.5827</td><td>0.033900</td><td>29.499</td></tr>
+</table>
+<div class="ok"><b>Contrôle indépendant n°2 (réussi)</b> : λ<sub>exp</sub> =
+0.0339 /h == λ<sub>Weibull(β=1)</sub> = 0.0339 /h.<br>
+<b>Contrôle indépendant n°3 (réussi)</b> : MTBF = 1/λ = 29.499 h ==
+N/F = 29.499 h.</div>
+
+<figure>
+  <img src="data/processed/reliability_laws.png" alt="Lois de fiabilité">
+  <figcaption>Fig. 2 — Lois ajustées vs Kaplan-Meier (les deux lois coïncident, β=1).</figcaption>
+</figure>
+
+<h3>3.4 MTBF par mode de panne (diagnostic)</h3>
+<table>
+<tr><th>Mode</th><th>Pannes</th><th>MTBF associé (h-machine)</th><th>Priorité</th></tr>
+<tr><td>HDF (thermique)</td><td>115</td><td>87.0</td><td>1</td></tr>
+<tr><td>OSF (surcharge)</td><td>98</td><td>102.0</td><td>2</td></tr>
+<tr><td>PWF (puissance)</td><td>95</td><td>105.3</td><td>3</td></tr>
+<tr><td>TWF (usure outil)</td><td>46</td><td>217.4</td><td>4</td></tr>
+<tr><td>RNF (aléatoire)</td><td>19</td><td>526.3</td><td>5 (indétectable)</td></tr>
+</table>
+<p><b>Interprétation maintenance</b> : HDF est le mode le plus fréquent (MTBF 87 h)
+→ prioriser la surveillance <code>temp_diff</code>. C'est cohérent avec l'AMDEC
+(HDF criticité 140). TWF, plus rare mais le plus grave (criticité 160), est déjà
+couvert par la règle préventive « remplacement outil à 180 min ».</p>
+
+<h3>3.5 MTTR et disponibilité</h3>
+<div class="note">Le dataset AI4I 2020 ne contient <b>pas</b> de temps de réparation.
+MTTR = 4 h est une <b>HYPOTHÈSE</b> explicite (ordre de grandeur industriel), à
+remplacer par les données GMAO réelles avant toute décision.</div>
+<p>A = MTBF / (MTBF + MTTR) = 29.499 / (29.499 + 4.0) = <b>88.06 %</b>.</p>
+
+<h3>3.6 Périodicité préventive optimale</h3>
+<div class="note"><b>Résultat important et contre-intuitif</b> : avec une loi
+<b>exponentielle</b> (taux constant, sans mémoire) et un coût de panne forfaitaire,
+la fonction de coût c(Tp) est <b>décroissante</b> : le minimum est atteint à la
+borne Tp → ∞. La politique optimale est donc le <b>run-to-failure</b>
+(coût limite Cf/MTBF = 678 €/h-machine sous les hypothèses Cp = 500 €, Cf = 20 000 €).
+Un préventif calendaire ne devient optimal que si β &gt; 1 (usure) — ce que ce
+dataset ne permet pas d'établir. <b>En revanche</b>, la maintenance
+<b>conditionnelle</b> (seuils capteurs + modèle ML) reste pleinement justifiée :
+elle intervient avant la panne sans consommer de durée de vie résiduelle.</div>
+<figure>
+  <img src="data/processed/maintenance_cost.png" alt="Coût de maintenance">
+  <figcaption>Fig. 3 — Coût total vs périodicité Tp : décroissant, asymptote au run-to-failure.</figcaption>
+</figure>
+
+<h2>4. Choix du modèle — diagnostic (déjà réalisé dans le projet)</h2>
+<table>
+<tr><th>Modèle</th><th>AUC typique</th><th>Interprétabilité</th><th>Verdict</th></tr>
+<tr><td>Decision Tree</td><td>0.90–0.93</td><td>★★★</td><td>Baseline</td></tr>
+<tr><td>Random Forest</td><td>0.97–0.98</td><td>★★</td><td>Bon, plus lourd</td></tr>
+<tr><td>SVM (RBF)</td><td>0.95–0.97</td><td>★</td><td>Mal adapté au déséquilibre</td></tr>
+<tr><td><b>XGBoost</b></td><td><b>0.985</b> (réel, projet)</td><td>★★ (SHAP)</td><td><b>Retenu</b></td></tr>
+</table>
+<p>XGBoost est retenu : meilleures AUC-ROC (0.985) et AUC-PR (0.875) sur données
+déséquilibrées (~3.4 % de pannes), entraînable en secondes, interprétable via
+l'importance des variables (<code>rpm_torque_ratio</code> 33.8 %, signal #1 de
+surcharge mécanique). Un LSTM serait sur-paramétré ici : les lignes du dataset
+sont indépendantes, sans dimension temporelle exploitable.</p>
+
+<h2>5. Entraînement et évaluation (résultats réels du projet)</h2>
+<table>
+<tr><th>Métrique</th><th>Valeur</th><th>Lecture maintenance</th></tr>
+<tr><td>AUC-ROC</td><td>0.985</td><td>Discrimination quasi parfaite</td></tr>
+<tr><td>AUC-PR</td><td>0.875</td><td>Métrique clé avec 3.4 % de pannes</td></tr>
+<tr><td>Rappel (seuil 0.111)</td><td>88.2 %</td><td>60 des 68 pannes du test détectées</td></tr>
+<tr><td>Faux négatifs</td><td>8 / 68</td><td>Profil TWF « silencieux » → corrigé par <code>wear_temp_stress</code></td></tr>
+<tr><td>Fausses alarmes</td><td>3.8 %</td><td>73 faux positifs / 1 932 normaux · coût d'inspection maîtrisé</td></tr>
+</table>
+<div class="note"><b>Choix du seuil 0.111</b> : décision économique, pas statistique —
+le coût d'une panne manquée est ≈ 20× celui d'une fausse alarme, donc on maximise
+le rappel. Il faudrait tracer la courbe <b>coût total vs seuil</b> avec les coûts
+réels de l'entreprise pour valider ce ratio.</div>
+
+<h2>6. Interprétation et décision</h2>
+<h3>6.1 Stratégie de maintenance chiffrée</h3>
+<table>
+<tr><th>Action</th><th>Déclencheur</th><th>Base</th></tr>
+<tr><td>Remplacement outil</td><td>tool_wear ≥ 180 min</td><td>Seuil TWF dataset (200 min) marge 10 %</td></tr>
+<tr><td>Intervention immédiate</td><td>score XGBoost &gt; 0.111</td><td>Seuil coût-optimisé du projet</td></tr>
+<tr><td>Alerte jaune</td><td>score &gt; 0.05</td><td>Marge avant seuil d'intervention</td></tr>
+<tr><td>Inspection refroidissement</td><td>temp_diff &lt; 8.6 K pendant 3 h</td><td>Seuil HDF dataset ; HDF = mode n°1 (MTBF 87 h)</td></tr>
+<tr><td>Réduction avance</td><td>torque &gt; 45 N·m prolongé</td><td>Seuil OSF dataset</td></tr>
+<tr><td>Arrêt contrôlé</td><td>power hors [3.5 ; 10.5] kW</td><td>Seuil PWF dataset</td></tr>
+</table>
+
+<h3>6.2 Limites</h3>
+<ul>
+<li>Snapshot horaire : pas de temps-avant-panne par machine → β de Weibull non
+estimable, pas de RUL possible en l'état.</li>
+<li>MTTR absent du dataset → disponibilité = 88.06 % repose sur l'hypothèse 4 h.</li>
+<li>Coûts Cp/Cf = hypothèses (500 € / 20 000 €), cohérentes avec l'ordre de grandeur
+« panne 2 000–50 000 € » du projet mais à calibrer.</li>
+<li>Données simulées par les auteurs du dataset : généralisation aux machines
+réelles à valider.</li>
+</ul>
+
+<h3>6.3 Perspectives</h3>
+<ul>
+<li>Acquisition de données temporelles par machine (IoT, MQTT) → estimation de β,
+modèle de Cox à risques compétitifs, puis prédiction de RUL (LSTM ou XGBoost sur
+fenêtres glissantes, type C-MAPSS).</li>
+<li>Brancher le score ML sur le tableau de bord Streamlit déjà en place
+(<code>app/streamlit_app.py</code>) pour un suivi temps réel.</li>
+<li>Tracer la courbe coût total vs seuil avec les coûts réels.</li>
+</ul>
+
+<h2>7. Reproductibilité</h2>
+<pre>
+python reliability_analysis.py    # -> data/processed/*.png + reliability_summary.json
+</pre>
+<p>Contrôles numériques indépendants intégrés au code (asserts) :
+KM vs taux empirique, λ<sub>exp</sub> vs λ<sub>Weibull(β=1)</sub>,
+MTBF 1/λ vs N/F — tous réussis (exit code 0).</p>
+
+</body>
+</html>

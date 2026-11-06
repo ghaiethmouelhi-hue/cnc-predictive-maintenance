@@ -1,0 +1,35 @@
+{
+  "n_total": 10000,
+  "n_fail": 339,
+  "fail_rate_pct": 3.39,
+  "bad_lines": 0,
+  "R_km_1h": 0.9660999999999992,
+  "R_km_check": 0.9661,
+  "AIC": {
+    "Exponentielle": 2974.5826993959463,
+    "Weibull (beta=1 fixé)": 2974.5826993959067
+  },
+  "lambda_per_h": 0.03389998837918976,
+  "MTBF_h": 29.498535185748665,
+  "MTBF_check_h": 29.49852507374631,
+  "MTTR_hypothese_h": 4.0,
+  "A_pct": 88.05917937061999,
+  "mode_counts": {
+    "TWF": 46,
+    "HDF": 115,
+    "PWF": 95,
+    "OSF": 98,
+    "RNF": 19
+  },
+  "mode_mtbf_h": {
+    "TWF": 217.3913043478261,
+    "HDF": 86.95652173913044,
+    "PWF": 105.26315789473684,
+    "OSF": 102.04081632653062,
+    "RNF": 526.3157894736842
+  },
+  "Cp_eur": 500.0,
+  "Cf_eur": 20000.0,
+  "Tp_optimal_h": "inf (run-to-failure)",
+  "C_optimal_eur_per_h": 677.9997675837952
+}

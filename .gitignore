@@ -1,0 +1,43 @@
+# ── Secrets & environnements ─────────────────────────────────
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.streamlit/secrets.toml.*
+
+# ── Environnements virtuels ──────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ── Journaux générés à l'exécution (données utilisateur) ─────
+data/processed/diagnostics_log.csv
+data/processed/maintenance_log.csv
+
+# ── Archives / doublons de dataset ───────────────────────────
+data/raw/*.zip
+
+# ── OS & IDE ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# NOTE : les artefacts nécessaires à la démonstration sont
+# volontairement versionnés :
+#   models/xgboost_model.pkl
+#   data/processed/scaler.pkl
+#   data/processed/chroma_db/
+#   data/processed/*.csv
+#   data/processed/*.json
+#   data/processed/*.png
