@@ -7,6 +7,17 @@ Toutes les vues sont définies dans ``app/pages``.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# La racine du dépôt doit être dans sys.path AVANT les imports
+# `from app…` / `from rag…` : Streamlit Cloud exécute ce fichier
+# sans garantir que le répertoire courant est au chemin Python.
+# (Sans ceci : ModuleNotFoundError: No module named 'app'.)
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 import streamlit as st
 
 from app.components import footer
